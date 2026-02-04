@@ -171,12 +171,60 @@ impl<K: Hash + Eq, V> HashMap<K, V> {
     }
 }
 
+pub struct HashSet<T: Hash + Eq>(HashMap<T, ()>);
+
+// derive requires T to impl Default
+impl<T: Hash + Eq> Default for HashSet<T> {
+    fn default() -> Self {
+        Self(HashMap::default())
+    }
+}
+
+impl<T: Hash + Eq> HashSet<T> {
+    pub fn with_capacity(n: usize) -> Self {
+        Self(HashMap::with_capacity(n))
+    }
+
+    pub fn contains(&self, val: T) -> bool {
+        self.0.contains(val)
+    }
+
+    pub fn insert(&mut self, val: T) -> bool {
+        self.0.insert(val, ()).is_none()
+    }
+
+    pub fn insert_without_grow(&mut self, val: T) -> bool {
+        self.0.insert_without_grow(val, ()).is_none()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[derive(PartialEq, Eq)]
+    struct SameHash(u32);
+
+    impl Hash for SameHash {
+        fn hash(&self) -> u64 {
+            if self.0.is_multiple_of(2) { 0 } else { 123456 }
+        }
+    }
+
     #[test]
-    fn basic() {
+    fn basic_map() {
         let mut map = HashMap::default();
         assert!(map.is_empty());
         assert_eq!(map.insert(1, 1), None);
@@ -189,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn many() {
+    fn large_map() {
         const LEN: u32 = 100_000;
         let mut map = HashMap::default();
         for i in 0..LEN {
@@ -202,23 +250,55 @@ mod tests {
         }
     }
 
-    #[derive(PartialEq, Eq)]
-    struct SameHash(u32);
-
-    impl Hash for SameHash {
-        fn hash(&self) -> u64 {
-            if self.0.is_multiple_of(2) { 0 } else { 123456 }
+    #[test]
+    fn same_hash_map() {
+        const LEN: u32 = 100;
+        let mut map = HashMap::default();
+        for i in 0..LEN {
+            map.insert(SameHash(i), i);
+        }
+        for i in 0..LEN {
+            assert_eq!(map[SameHash(i)], i);
         }
     }
 
     #[test]
-    fn same_hash() {
-        let mut map = HashMap::default();
-        for i in 0..100 {
-            map.insert(SameHash(i), i);
+    fn basic_set() {
+        let mut set = HashSet::default();
+        assert!(set.is_empty());
+        assert!(set.insert(1));
+        assert!(!set.insert(1));
+        assert!(set.insert(2));
+        assert_eq!(set.len(), 2);
+        assert!(!set.contains(0));
+        assert!(set.contains(1));
+        assert!(set.contains(2));
+    }
+
+    #[test]
+    fn large_set() {
+        const LEN: u32 = 100_000;
+        let mut set = HashSet::default();
+        for i in 0..LEN {
+            set.insert(i);
         }
-        for i in 0..100 {
-            assert_eq!(map[SameHash(i)], i);
+        assert_eq!(set.len(), LEN as usize);
+        for i in 0..LEN {
+            assert!(set.contains(i));
         }
+        assert!(!set.contains(LEN));
+    }
+
+    #[test]
+    fn same_hash_set() {
+        const LEN: u32 = 100;
+        let mut set = HashSet::default();
+        for i in 0..LEN {
+            set.insert(SameHash(i));
+        }
+        for i in 0..LEN {
+            assert!(set.contains(SameHash(i)));
+        }
+        assert!(!set.contains(SameHash(LEN)));
     }
 }
