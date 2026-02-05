@@ -98,7 +98,9 @@ impl<K: Hash + Eq, V> HashMap<K, V> {
     pub fn get(&self, key: K) -> Option<&V> {
         let hash = Self::usize_hash(&key);
         let mut offset = 0;
-        while let Some((k, v)) = &self.data[(hash + offset) % self.data.len()] {
+        while offset != self.data.len()
+            && let Some((k, v)) = &self.data[(hash + offset) % self.data.len()]
+        {
             if key == *k {
                 return Some(v);
             }
