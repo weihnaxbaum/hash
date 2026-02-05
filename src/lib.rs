@@ -160,6 +160,24 @@ impl<K: Hash + Eq, V> HashMap<K, V> {
         None
     }
 
+    pub fn remove(&mut self, key: K) -> Option<V> {
+        let hash = Self::usize_hash(&key);
+        let mut offset = 0;
+        let data_len = self.data.len();
+        while offset != data_len
+            && let Some((k, _)) = &self.data[(hash + offset) % data_len]
+        {
+            if key == *k {
+                self.len -= 1;
+                let (_, v) = self.data[(hash + offset) % data_len].take().unwrap();
+                self.fill_none_index((hash + offset) % data_len);
+                return Some(v);
+            }
+            offset += 1;
+        }
+        None
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -181,6 +199,26 @@ impl<K: Hash + Eq, V> HashMap<K, V> {
         std::mem::swap(&mut other, self);
         for (k, v) in other.data.into_iter().flatten() {
             self.insert_without_grow(k, v);
+        }
+    }
+
+    fn fill_none_index(&mut self, mut i: usize) {
+        let data_len = self.data.len();
+        let start = i;
+        loop {
+            i = (i + 1) % data_len;
+            if i == start {
+                break;
+            }
+            let Some((k, _)) = &self.data[i] else {
+                break;
+            };
+            let hash = Self::usize_hash(k);
+            if hash % data_len == i {
+                break;
+            }
+            let prev_i = if i == 0 { data_len - 1 } else { i - 1 };
+            self.data.swap(prev_i, i);
         }
     }
 
@@ -222,6 +260,10 @@ impl<T: Hash + Eq> HashSet<T> {
         self.0.insert_without_grow(val, ()).is_none()
     }
 
+    pub fn remove(&mut self, val: T) -> bool {
+        self.0.remove(val).is_some()
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -260,7 +302,10 @@ mod tests {
         assert_eq!(map[1], 2);
         assert_eq!(map[2], 4);
         map[2] += 1;
-        assert_eq!(map[2], 5);
+        assert_eq!(map.remove(2), Some(5));
+        assert_eq!(map.remove(2), None);
+        assert_eq!(map.remove(1), Some(2));
+        assert!(map.is_empty());
     }
 
     #[test]
@@ -291,11 +336,7 @@ mod tests {
 
     #[test]
     fn rand_data() {
-        let data = (0..1000).map(|mut x| {
-            x ^= x << 13;
-            x ^= x >> 17;
-            (x << 5) % 100
-        });
+        let data = (0..1000).map(|mut x| rand(&mut x) % 100);
         let mut std_map = std::collections::HashMap::new();
         let mut map = HashMap::default();
         for n in data {
@@ -318,6 +359,40 @@ mod tests {
     }
 
     #[test]
+    fn rand_actions() {
+        let mut seed = 1u32;
+        let mut std_map = std::collections::HashMap::new();
+        let mut map = HashMap::default();
+        for _ in 0..10000 {
+            let k = rand(&mut seed) % 100;
+            match rand(&mut seed) % 4 {
+                0 => {
+                    assert_eq!(std_map.get(&k), map.get(k));
+                }
+                1 => {
+                    let std_v = std_map.get_mut(&k);
+                    let v = map.get_mut(k);
+                    assert_eq!(std_v, v);
+                    if let Some(std_v) = std_v
+                        && let Some(v) = v
+                    {
+                        *std_v += 1;
+                        *v += 1;
+                    }
+                }
+                2 => {
+                    let v = rand(&mut seed) % 100;
+                    assert_eq!(std_map.insert(k, v), map.insert(k, v));
+                }
+                3 => {
+                    assert_eq!(std_map.remove(&k), map.remove(k));
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
     fn basic_set() {
         let mut set = HashSet::default();
         assert!(set.is_empty());
@@ -328,6 +403,10 @@ mod tests {
         assert!(!set.contains(0));
         assert!(set.contains(1));
         assert!(set.contains(2));
+        assert!(set.remove(2));
+        assert!(!set.remove(2));
+        assert!(set.remove(1));
+        assert!(set.is_empty());
     }
 
     #[test]
@@ -355,5 +434,12 @@ mod tests {
             assert!(set.contains(SameHash(i)));
         }
         assert!(!set.contains(SameHash(LEN)));
+    }
+
+    fn rand(x: &mut u32) -> u32 {
+        *x ^= *x << 13;
+        *x ^= *x >> 17;
+        *x ^= *x << 5;
+        *x
     }
 }
