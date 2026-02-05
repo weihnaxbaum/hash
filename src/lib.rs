@@ -1,4 +1,4 @@
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 
 pub trait Hash {
     fn hash(&self) -> u64;
@@ -90,6 +90,15 @@ impl<K: Hash + Eq, V> Index<K> for HashMap<K, V> {
     }
 }
 
+impl<K: Hash + Eq, V> IndexMut<K> for HashMap<K, V> {
+    fn index_mut(&mut self, key: K) -> &mut Self::Output {
+        match self.get_mut(key) {
+            Some(v) => v,
+            None => panic!("Invalid HashMap index"),
+        }
+    }
+}
+
 impl<K: Hash + Eq, V> HashMap<K, V> {
     pub fn with_capacity(n: usize) -> Self {
         Self::with_data_len(n * 2)
@@ -105,6 +114,20 @@ impl<K: Hash + Eq, V> HashMap<K, V> {
                 return Some(v);
             }
             offset += 1;
+        }
+        None
+    }
+
+    pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
+        let hash = Self::usize_hash(&key);
+        let data_len = self.data.len();
+        for offset in 0..data_len {
+            let i = (hash + offset) % data_len;
+            match &self.data[i] {
+                Some((k, _)) if key == *k => return Some(&mut self.data[i].as_mut().unwrap().1),
+                None => return None,
+                _ => {}
+            }
         }
         None
     }
@@ -236,6 +259,8 @@ mod tests {
         assert!(!map.contains(0));
         assert_eq!(map[1], 2);
         assert_eq!(map[2], 4);
+        map[2] += 1;
+        assert_eq!(map[2], 5);
     }
 
     #[test]
@@ -280,9 +305,11 @@ mod tests {
                     std_map.insert(n, 1);
                 }
             }
-            match map.get(n) {
-                Some(v) => map.insert(n, v + 1),
-                None => map.insert(n, 1),
+            match map.get_mut(n) {
+                Some(v) => *v += 1,
+                None => {
+                    map.insert(n, 1);
+                }
             };
         }
         for (k, v) in std_map {

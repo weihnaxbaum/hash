@@ -80,10 +80,12 @@ fn map(b: Bencher, (len, distinct): (u32, u32)) {
     b.bench(|| {
         let mut map = hash::HashMap::default();
         for n in &data {
-            match map.get(*n) {
-                Some(v) => map.insert(*n, v + 1),
-                None => map.insert(*n, 1),
-            };
+            match map.get_mut(*n) {
+                Some(v) => *v += 1,
+                None => {
+                    map.insert(*n, 1);
+                }
+            }
         }
         black_box(map);
     });
