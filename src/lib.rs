@@ -265,6 +265,32 @@ mod tests {
     }
 
     #[test]
+    fn rand_data() {
+        let data = (0..1000).map(|mut x| {
+            x ^= x << 13;
+            x ^= x >> 17;
+            (x << 5) % 100
+        });
+        let mut std_map = std::collections::HashMap::new();
+        let mut map = HashMap::default();
+        for n in data {
+            match std_map.get_mut(&n) {
+                Some(v) => *v += 1,
+                None => {
+                    std_map.insert(n, 1);
+                }
+            }
+            match map.get(n) {
+                Some(v) => map.insert(n, v + 1),
+                None => map.insert(n, 1),
+            };
+        }
+        for (k, v) in std_map {
+            assert_eq!(v, map[k]);
+        }
+    }
+
+    #[test]
     fn basic_set() {
         let mut set = HashSet::default();
         assert!(set.is_empty());
